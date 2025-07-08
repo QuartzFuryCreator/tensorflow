@@ -82,8 +82,8 @@ TEST_F(RootInstructionSinkerTest, Tuple) {
     multiply = s32[3]{0} multiply(get-tuple-element.2, get-tuple-element.2)
     ROOT tuple = (s32[], s32[3]{0}) tuple(add, multiply)
     after-all = token[] after-all()
-    send = (s32[3]{0}, u32[], token[]) send(multiply, after-all), channel_id=1
-    send-done = token[] send-done(send), channel_id=1
+    send = (s32[3]{0}, u32[], token[]) send(multiply, after-all), channel_id=1, is_host_transfer=true
+    send-done = token[] send-done(send), channel_id=1, is_host_transfer=true
   }
   While.condition {
     loop_var.2 = (s32[], s32[3]{0}) parameter(0)
@@ -148,8 +148,8 @@ TEST_F(RootInstructionSinkerTest, Nontuple) {
     param = s32[3]{0} parameter(0)
     ROOT multiply = s32[3]{0} multiply(param, param)
     after-all = token[] after-all()
-    send = (s32[3]{0}, u32[], token[]) send(multiply, after-all), channel_id=1
-    send-done = token[] send-done(send), channel_id=1
+    send = (s32[3]{0}, u32[], token[]) send(multiply, after-all), channel_id=1, is_host_transfer=true
+    send-done = token[] send-done(send), channel_id=1, is_host_transfer=true
   }
   ENTRY While {
     constant.4 = s32[3]{0} constant({0, 1, 2})

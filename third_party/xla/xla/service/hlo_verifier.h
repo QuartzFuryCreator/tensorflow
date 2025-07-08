@@ -112,6 +112,11 @@ struct HloVerifierOpts {
     return std::move(*this);
   }
 
+  HloVerifierOpts&& VerifyNoCollectiveDeadlocks() {
+    verify_no_collective_deadlocks = true;
+    return std::move(*this);
+  }
+
   bool IsLayoutSensitive() const { return layout_sensitive; }
 
   bool AllowMixedPrecision() const { return allow_mixed_precision; }
@@ -164,6 +169,9 @@ struct HloVerifierOpts {
 
   // Check if a shape has a host memory space color
   bool verify_no_host_memory_space = false;
+
+  // Check if collectives in the given module will result in a deadlock.
+  bool verify_no_collective_deadlocks = false;
 
   HloPredicate instruction_can_change_layout;
 
