@@ -7,6 +7,7 @@ load(
     "tf_dtensor_tpu_dependencies",
 )
 load("//tensorflow/core/platform:rules_cc.bzl", "cc_library")
+load("//tensorflow:tensorflow.bzl", "tf_cc_test")
 
 default_visibility = [
     "//smartass/brain/jax/embeddings:__pkg__",
