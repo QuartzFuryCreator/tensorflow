@@ -113,23 +113,19 @@ std::optional<NodeDef> ExtractSmallTensorValue(TFE_Context* context,
 
   switch (dtype) {
     case TF_INT32:
-      AppendIntValues(num_elements,
-                      static_cast<const int*>(raw_data),
+      AppendIntValues(num_elements, static_cast<const int*>(raw_data),
                       &tensor_proto);
       break;
     case TF_INT64:
-      AppendInt64Values(num_elements,
-                        static_cast<const int64_t*>(raw_data),
+      AppendInt64Values(num_elements, static_cast<const int64_t*>(raw_data),
                         &tensor_proto);
       break;
     case TF_STRING:
-      AppendStringValues(num_elements,
-                         static_cast<const TF_TString*>(raw_data),
+      AppendStringValues(num_elements, static_cast<const TF_TString*>(raw_data),
                          &tensor_proto);
       break;
     case TF_FLOAT:
-      AppendFloatValues(num_elements,
-                        static_cast<const float*>(raw_data),
+      AppendFloatValues(num_elements, static_cast<const float*>(raw_data),
                         &tensor_proto);
       break;
     default:

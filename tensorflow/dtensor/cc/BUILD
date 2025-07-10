@@ -411,3 +411,19 @@ cc_library(
         "@llvm-project//mlir:IR",
     ],
 )
+
+
+cc_test(
+    name = "small_constant_optimization_test",
+    srcs = ["small_constant_optimization_test.cc"],
+    deps = [
+        "//tensorflow/core:test",                  # gTest & friends
+        "//tensorflow/core:test_main",             # <— provide main()
+        "//tensorflow/core:lib",                   # fingerprint 
+        "//tensorflow/core:protos_all_cc",         # node_def.pb.h
+        "//tensorflow/dtensor/cc:small_constant_optimization",
+        "//tensorflow/dtensor/cc:tensor_layout",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/status",
+    ],
+)
