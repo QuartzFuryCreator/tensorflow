@@ -413,7 +413,7 @@ cc_library(
 )
 
 
-cc_test(
+tf_cc_test(
     name = "small_constant_optimization_test",
     srcs = ["small_constant_optimization_test.cc"],
     deps = [
