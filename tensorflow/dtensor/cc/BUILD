@@ -1,13 +1,13 @@
 #include "third_party/absl/strings/str_cat.h"
 #DTensor C++ runtime and libraries.
 
+load("//tensorflow:tensorflow.bzl", "tf_cc_test")
 load("//tensorflow:tensorflow.default.bzl", "tf_kernel_library")
 load(
     "//tensorflow/core/platform:build_config.bzl",
     "tf_dtensor_tpu_dependencies",
 )
 load("//tensorflow/core/platform:rules_cc.bzl", "cc_library")
-load("//tensorflow:tensorflow.bzl", "tf_cc_test")
 
 default_visibility = [
     "//smartass/brain/jax/embeddings:__pkg__",
@@ -413,18 +413,17 @@ cc_library(
     ],
 )
 
-
 tf_cc_test(
     name = "small_constant_optimization_test",
     srcs = ["small_constant_optimization_test.cc"],
     deps = [
-        "//tensorflow/core:test",                  # gTest & friends
-        "//tensorflow/core:test_main",             # <— provide main()
-        "//tensorflow/core:lib",                   # fingerprint 
-        "//tensorflow/core:protos_all_cc",         # node_def.pb.h
+        "//tensorflow/core:lib",  # fingerprint
+        "//tensorflow/core:protos_all_cc",  # node_def.pb.h
+        "//tensorflow/core:test",  # gTest & friends
+        "//tensorflow/core:test_main",  # <— provide main()
         "//tensorflow/dtensor/cc:small_constant_optimization",
         "//tensorflow/dtensor/cc:tensor_layout",
-        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
     ],
 )
