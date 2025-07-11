@@ -19,6 +19,7 @@ limitations under the License.
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <variant>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -56,6 +57,21 @@ namespace xla::codegen {
 // and vector width(s) of the argument and result.
 class Intrinsic {
  public:
+  // A scalar argument or result.
+  struct Scalar {
+    PrimitiveType type;
+  };
+
+  // A vector argument or result.
+  struct Vec {
+    PrimitiveType type;
+    size_t width;
+  };
+
+  // Intrinsics take multiple arguments and always return a single result.
+  using Arg = std::variant<Scalar, Vec>;
+  using Res = std::variant<Scalar, Vec>;
+
   // Forward declare supported XLA intrinsics. Individual intrinsics are
   // implemented in separate headers, and this class simply defines templates
   // that get forwarded to the concrete implementation.
