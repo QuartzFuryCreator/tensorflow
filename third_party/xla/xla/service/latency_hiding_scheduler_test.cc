@@ -3857,9 +3857,13 @@ while_body {
   param = get-tuple-element(tuple), index=1
   i = get-tuple-element(tuple), index=2
   dot = f32[16,16] dot(param, param), lhs_contracting_dims={0}, rhs_contracting_dims={1}
-  recv_done = (f32[16], token[]) recv-done(gte), frontend_attributes={_xla_send_recv_source_target_pairs={{0,1},{1,2},{2,3}}}
+  recv_done = (f32[16], token[]) recv-done(gte), frontend_attributes={_xla_send_recv_source_target_pairs="{{0,1},{1,2},{2,3}}"}
   after_all = token[] after-all()
-  recv = (f32[16,16], u32[], token[]) recv(after_all), frontend_attributes={_xla_send_recv_source_target_pairs={{0,1},{1,2},{2,3}}}, control-predecessors={recv_done}
+  matching_send = (f32[16,16], u32[], token[]) send(dot, after_all), frontend_attributes={_xla_send_recv_source_target_pairs="{{0,1},{1,2},{2,3}}"}
+  matching_send_done = token[] send-done(matching_send)
+  recv = (f32[16,16], u32[], token[]) recv(after_all), frontend_attributes={_xla_send_recv_source_target_pairs="{{0,1},{1,2},{2,3}}"}, control-predecessors={recv_done}
+  next_matching_send = (f32[16,16], u32[], token[]) send(dot, after_all), frontend_attributes={_xla_send_recv_source_target_pairs="{{0,1},{1,2},{2,3}}"}
+  next_matching_send_done = token[] send-done(next_matching_send)
   c1 = u32[] constant(1)
   add = add(i, c1)
   ROOT tuple_ = ((f32[16,16], u32[], token[]), f32[16,16], u32[]) tuple(recv, dot, add)
@@ -3868,12 +3872,12 @@ while_body {
 ENTRY main {
   param0 = f32[16,16] parameter(0)
   after_all0 = token[] after-all()
-  recv0 = (f32[16,16], u32[], token[]) recv(after_all0), frontend_attributes={_xla_send_recv_source_target_pairs={{0,1},{1,2},{2,3}}}
+  recv0 = (f32[16,16], u32[], token[]) recv(after_all0), frontend_attributes={_xla_send_recv_source_target_pairs="{{0,1},{1,2},{2,3}}"}
   c0 = u32[] constant(0)
   tuple = ((f32[16,16], u32[], token[]), f32[16,16], u32[]) tuple(recv0, param0, c0)
   while = ((f32[16,16], u32[], token[]), f32[16,16], u32[]) while(tuple), body=while_body, condition=while_condition
   gte0 = (f32[16,16], u32[], token[]) get-tuple-element(while), index=0
-  ROOT recv_done0 = (f32[16], token[]) recv-done(gte0), frontend_attributes={_xla_send_recv_source_target_pairs={{0,1},{1,2},{2,3}}}
+  ROOT recv_done0 = (f32[16], token[]) recv-done(gte0), frontend_attributes={_xla_send_recv_source_target_pairs="{{0,1},{1,2},{2,3}}"}
 }
 )";
 
@@ -4186,10 +4190,10 @@ while_body {
   gte3 = token[] get-tuple-element(param), index=3
   gte4 = token[] get-tuple-element(param), index=4
   bitcast = bf16[8]{0} bitcast(gte0)
-  s.1 = (bf16[8]{0}, token[]) send(gte0, gte3)
-  sd.1 = bf16[8]{0} send-done(s.1)
-  s.2 = (bf16[8]{0}, token[]) send(gte2, gte4)
-  sd.2 = bf16[8]{0} send-done(s.2)
+  s.1 = (bf16[8]{0}, token[]) send(gte0, gte3), is_host_transfer=true
+  sd.1 = bf16[8]{0} send-done(s.1), is_host_transfer=true
+  s.2 = (bf16[8]{0}, token[]) send(gte2, gte4), is_host_transfer=true
+  sd.2 = bf16[8]{0} send-done(s.2), is_host_transfer=true
   ROOT tuple = (bf16[8]{0}, bf16[8]{0}, pred[], token[], token[]) tuple(gte2, gte0, gte1, sd.2, sd.1)
 }
 

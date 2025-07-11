@@ -4332,6 +4332,8 @@ TEST_F(MemorySpaceAssignmentTest, SendDoneShouldHaveSendOperand) {
     %after-all = token[] after-all()
     %send = (f32[3]{0}, u32[], token[]) send(f32[3]{0} %p0, token[] %after-all), channel_id=2
     %send-done = token[] send-done((f32[3]{0}, u32[], token[]) %send), channel_id=2
+    matching_recv = (f32[3]{0}, u32[], token[]) recv(token[] %after-all), channel_id=2
+    matching_recv-done = (f32[3]{0}, token[]) recv-done((f32[3]{0}, u32[], token[]) %matching_recv), channel_id=2
     ROOT %add = f32[3]{0} add(f32[3]{0} %p0, f32[3]{0} %neg6)
   }
   )";
@@ -4359,6 +4361,8 @@ TEST_F(MemorySpaceAssignmentTest, SendAndSendDoneShouldGetSameAllocation) {
     %neg5 = f32[3]{0} negate(f32[3]{0} %neg4)
     %neg6 = f32[3]{0} negate(f32[3]{0} %neg5)
     %send-done = token[] send-done((f32[3]{0}, u32[], token[]) %send), channel_id=2
+    matching_recv = (f32[3]{0}, u32[], token[]) recv(token[] %after-all), channel_id=2
+    matching_recv-done = (f32[3]{0}, token[]) recv-done((f32[3]{0}, u32[], token[]) %matching_recv), channel_id=2
     ROOT %add = f32[3]{0} add(f32[3]{0} %p0, f32[3]{0} %neg6)
   }
   )";

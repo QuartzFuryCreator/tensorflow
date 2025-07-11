@@ -23,6 +23,7 @@ limitations under the License.
 #include <memory>
 #include <numeric>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -41,6 +42,7 @@ limitations under the License.
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "re2/re2.h"
 #include "xla/comparison_util.h"
 #include "xla/hlo/ir/dfs_hlo_visitor_with_default.h"
 #include "xla/hlo/ir/hlo_casting_utils.h"
@@ -2412,6 +2414,161 @@ absl::Status VerifyAsynchronousInstructionPairs(const HloModule& module) {
   return absl::OkStatus();
 }
 
+absl::Status ValidateSourceTargetPairs(std::string source_target_pairs) {
+  source_target_pairs.erase(
+      std::remove_if(source_target_pairs.begin(), source_target_pairs.end(),
+                     [](char c) { return c == '"' || c == '{' || c == '}'; }),
+      source_target_pairs.end());
+  std::vector<std::pair<int, int>> pairs;
+  absl::string_view input(source_target_pairs);
+  int source, target;
+  while (RE2::FindAndConsume(&input, "(\\d+),(\\d+)", &source, &target)) {
+    pairs.push_back({source, target});
+  }
+
+  std::set<int> sources;
+  std::set<int> targets;
+  for (const auto& pair : pairs) {
+    int source = pair.first;
+    int target = pair.second;
+    if (sources.find(target) != sources.end()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Source-target pairs contain a cycle: ", source_target_pairs));
+    }
+    if ((sources.find(source) != sources.end()) ||
+        (targets.find(target) != targets.end())) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Duplicate source or target detected in source-target pairs: ",
+          source_target_pairs));
+    }
+    sources.insert(source);
+    targets.insert(target);
+  }
+  return absl::OkStatus();
+}
+
+// Helper function to match source-target pairs for a pair of send/recv
+// instructions.
+absl::Status VerifySourceTargetPairs(const HloInstruction* first,
+                                     const HloInstruction* second) {
+  if (first == nullptr || second == nullptr) {
+    return Internal("Expected send or recv instruction to be non-null");
+  }
+  const auto& send_source_target_pairs =
+      first->frontend_attributes().map().find(kSendRecvSourceTargetPairsAttr);
+  const auto& recv_source_target_pairs =
+      second->frontend_attributes().map().find(kSendRecvSourceTargetPairsAttr);
+  // Source-target pairs should be set or unset for both send and recv.
+  if (send_source_target_pairs == first->frontend_attributes().map().end() &&
+      recv_source_target_pairs == second->frontend_attributes().map().end()) {
+    return absl::OkStatus();
+  }
+  if (send_source_target_pairs == first->frontend_attributes().map().end() ||
+      recv_source_target_pairs == second->frontend_attributes().map().end()) {
+    return Internal(
+        "Expected both send and recv instruction to have source-target pairs "
+        "set, but found %s and %s",
+        first->ToString(), second->ToString());
+  }
+  if (send_source_target_pairs->second != recv_source_target_pairs->second) {
+    return Internal(
+        "Expected send and recv instructions to have the same source-target "
+        "pairs, but found %s and %s",
+        first->ToString(), second->ToString());
+  }
+  return ValidateSourceTargetPairs(send_source_target_pairs->second);
+}
+
+// Checks that the send/recv instructions in the module do not deadlock. This is
+// only done on scheduled modules and is specific to device-to-device
+// communications on GPU. At a high level, we want to check that:
+// 1. no collectives are scheduled between a matching pair of send and recv
+// 2. no two send instructions are scheduled in a row
+// 3. no two recv instructions are scheduled in a row
+// 4. the program does not terminate with a dangling send or recv
+
+absl::Status VerifyNoCollectiveDeadlocks(const HloModule& module) {
+  enum DfaState { no_expectation, expect_send, expect_recv };
+  DfaState current_state = DfaState::no_expectation;
+  const HloInstruction* current_instruction = nullptr;
+  for (const HloComputation* computation : module.computations()) {
+    for (const HloInstruction* instruction : computation->instructions()) {
+      switch (instruction->opcode()) {
+        case HloOpcode::kSend:
+          if (DynCast<HloSendInstruction>(instruction)->is_host_transfer()) {
+            continue;
+          }
+          switch (current_state) {
+            case DfaState::no_expectation:
+              current_instruction = instruction;
+              current_state = DfaState::expect_recv;
+              break;
+            case DfaState::expect_send:
+              TF_RETURN_IF_ERROR(
+                  VerifySourceTargetPairs(current_instruction, instruction));
+              current_state = DfaState::no_expectation;
+              current_instruction = nullptr;
+              break;
+            case DfaState::expect_recv:
+              return Internal("Expected recv to match send, but found %s",
+                              instruction->ToString());
+            default:
+              break;
+          }
+          break;
+        case HloOpcode::kRecv:
+          if (DynCast<HloRecvInstruction>(instruction)->is_host_transfer()) {
+            continue;
+          }
+          switch (current_state) {
+            case DfaState::no_expectation:
+              current_instruction = instruction;
+              current_state = DfaState::expect_send;
+              break;
+            case DfaState::expect_send:
+              return Internal("Expected send to match recv, but found %s",
+                              instruction->ToString());
+            case DfaState::expect_recv:
+              TF_RETURN_IF_ERROR(
+                  VerifySourceTargetPairs(current_instruction, instruction));
+              current_state = DfaState::no_expectation;
+              current_instruction = nullptr;
+              break;
+            default:
+              break;
+          }
+          break;
+        case HloOpcode::kAllGather:
+        case HloOpcode::kAllReduce:
+        case HloOpcode::kAllToAll:
+        case HloOpcode::kRaggedAllToAll:
+        case HloOpcode::kCollectivePermute:
+        case HloOpcode::kReduceScatter:
+        case HloOpcode::kCollectiveBroadcast:
+          switch (current_state) {
+            case DfaState::expect_send:
+            case DfaState::expect_recv:
+              return Internal("Expected send or recv, but found %s",
+                              instruction->ToString());
+            default:
+              break;
+          }
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  return current_state == DfaState::no_expectation
+             ? absl::OkStatus()
+             : Internal(
+                   "Program terminated with dangling send or recv. Last "
+                   "checked instruction: %s",
+                   current_instruction == nullptr
+                       ? ""
+                       : current_instruction->ToString());
+}
+
 // Checks that the asynchronous computation only has a root and parameter
 // instructions.
 absl::Status VerifyAsyncComputation(const HloComputation* async_computation) {
@@ -3425,6 +3582,7 @@ absl::StatusOr<bool> HloVerifier::Run(
     // If the module has a schedule, it must be valid.
     if (module->has_schedule()) {
       TF_RETURN_IF_ERROR(module->schedule().Verify());
+      TF_RETURN_IF_ERROR(VerifyNoCollectiveDeadlocks(*module));
     }
 
     if (HloInstruction::IsThreadIncluded(
